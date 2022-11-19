@@ -1,38 +1,19 @@
-import { PlaywrightCrawler } from 'crawlee';
+import { PlaywrightCrawler, log } from 'crawlee';
+import { router } from './routes.js';
 
+// This is better set with CRAWLEE_LOG_LEVEL env var
+// or a configuration option. This is just for show 😈
+log.setLevel(log.LEVELS.DEBUG);
+
+log.debug('Setting up crawler.');
 const crawler = new PlaywrightCrawler({
-    requestHandler: async ({ page, request, enqueueLinks }) => {
-        console.log(`Processing: ${request.url}`)
-        if (request.label === 'DETAIL') {
-            const urlParts = request.url.split('/').slice(-2);
-            const modifiedTimestamp = await page.locator('time[datetime]').getAttribute('datetime');
-            const runsRow = page.locator('ul.ActorHeader-stats > li').filter({ hasText: 'Runs' });
-            const runCountString = await runsRow.locator('span').last().textContent();
-
-            const results = {
-                url: request.url,
-                uniqueIdentifier: urlParts.join('/'),
-                owner: urlParts[0],
-                title: await page.locator('h1').textContent(),
-                description: await page.locator('span.actor-description').textContent(),
-                modifiedDate: new Date(Number(modifiedTimestamp)),
-                runCount: Number(runCountString?.replace(',', '')),
-            }
-
-            console.log(results)
-        } else {
-            await page.waitForSelector('button.ActorStorePagination-loadMoreButton');
-            await enqueueLinks({
-                selector: '.ActorStorePagination-pages > a',
-                label: 'LIST',
-            })
-            await page.waitForSelector('.ActorStoreItem');
-            await enqueueLinks({
-                selector: '.ActorStoreItem',
-                label: 'DETAIL', // <= note the different label
-            })
-        }
-    }
+    // Instead of the long requestHandler with
+    // if clauses we provide a router instance.
+    requestHandler: router,
 });
 
-await crawler.run(['https://apify.com/store']);
+log.debug('Adding requests to the queue.');
+await crawler.addRequests(['https://apify.com/store']);
+
+// crawler.run has its own logs 🙂
+await crawler.run();
