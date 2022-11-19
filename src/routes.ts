@@ -4,6 +4,24 @@ import { createPlaywrightRouter, Dataset } from 'crawlee';
 // intellisense and typings. You can use Router.create() too.
 export const router = createPlaywrightRouter();
 
+// This is a fallback route which will handle the start URL
+// as well as the LIST labelled URLs.
+router.addDefaultHandler(async ({ request, page, enqueueLinks, log }) => {
+    log.debug(`Enqueueing pagination: ${request.url}`)
+    await page.waitForSelector('button.ActorStorePagination-loadMoreButton');
+    await enqueueLinks({
+        selector: '.ActorStorePagination-pages > a',
+        label: 'LIST',
+    })
+    log.debug(`Enqueueing actor details: ${request.url}`)
+    await page.waitForSelector('.ActorStoreItem');
+    await enqueueLinks({
+        selector: '.ActorStoreItem',
+        label: 'DETAIL', // <= note the different label
+    })
+
+});
+
 // This replaces the request.label === DETAIL branch of the if clause.
 router.addHandler('DETAIL', async ({ request, page, log }) => {
     log.debug(`Extracting data: ${request.url}`)
@@ -24,22 +42,4 @@ router.addHandler('DETAIL', async ({ request, page, log }) => {
 
     log.debug(`Saving data: ${request.url}`)
     await Dataset.pushData(results);
-});
-
-// This is a fallback route which will handle the start URL
-// as well as the LIST labelled URLs.
-router.addDefaultHandler(async ({ request, page, enqueueLinks, log }) => {
-    log.debug(`Enqueueing pagination: ${request.url}`)
-    await page.waitForSelector('button.ActorStorePagination-loadMoreButton');
-    await enqueueLinks({
-        selector: '.ActorStorePagination-pages > a',
-        label: 'LIST',
-    })
-    log.debug(`Enqueueing actor details: ${request.url}`)
-    await page.waitForSelector('.ActorStoreItem');
-    await enqueueLinks({
-        selector: '.ActorStoreItem',
-        label: 'DETAIL', // <= note the different label
-    })
-
 });
