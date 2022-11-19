@@ -1,24 +1,38 @@
-// For more information, see https://crawlee.dev/
-import { PlaywrightCrawler, Dataset } from 'crawlee';
+import { PlaywrightCrawler } from 'crawlee';
 
-// PlaywrightCrawler crawls the web using a headless
-// browser controlled by the Playwright library.
 const crawler = new PlaywrightCrawler({
-    // Use the requestHandler to process each of the crawled pages.
-    async requestHandler({ request, page, enqueueLinks, log }) {
-        const title = await page.title();
-        log.info(`Title of ${request.loadedUrl} is '${title}'`);
+    requestHandler: async ({ page, request, enqueueLinks }) => {
+        console.log(`Processing: ${request.url}`)
+        if (request.label === 'DETAIL') {
+            const urlParts = request.url.split('/').slice(-2);
+            const modifiedTimestamp = await page.locator('time[datetime]').getAttribute('datetime');
+            const runsRow = page.locator('ul.ActorHeader-stats > li').filter({ hasText: 'Runs' });
+            const runCountString = await runsRow.locator('span').last().textContent();
 
-        // Save results as JSON to ./storage/datasets/default
-        await Dataset.pushData({ title, url: request.loadedUrl });
+            const results = {
+                url: request.url,
+                uniqueIdentifier: urlParts.join('/'),
+                owner: urlParts[0],
+                title: await page.locator('h1').textContent(),
+                description: await page.locator('span.actor-description').textContent(),
+                modifiedDate: new Date(Number(modifiedTimestamp)),
+                runCount: Number(runCountString?.replace(',', '')),
+            }
 
-        // Extract links from the current page
-        // and add them to the crawling queue.
-        await enqueueLinks();
-    },
-    // Uncomment this option to see the browser window.
-    // headless: false,
+            console.log(results)
+        } else {
+            await page.waitForSelector('button.ActorStorePagination-loadMoreButton');
+            await enqueueLinks({
+                selector: '.ActorStorePagination-pages > a',
+                label: 'LIST',
+            })
+            await page.waitForSelector('.ActorStoreItem');
+            await enqueueLinks({
+                selector: '.ActorStoreItem',
+                label: 'DETAIL', // <= note the different label
+            })
+        }
+    }
 });
 
-// Add first URL to the queue and start the crawl.
-await crawler.run(['https://crawlee.dev']);
+await crawler.run(['https://apify.com/store']);
